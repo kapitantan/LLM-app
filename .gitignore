@@ -1,3 +1,6 @@
 .venv
 .env
 app/memo.py
+highlight
+summary
+problem_bank
