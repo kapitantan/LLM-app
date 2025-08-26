@@ -5,3 +5,6 @@ highlight
 summary
 problem_bank
 memo.py
+build
+dist
+app.spec

@@ -21,14 +21,22 @@
 
 ## フォルダ構成
 ```
-kindle
+app
 ├─ highlight/     # 入力：プラグインが吐く元ハイライト（複数冊）
 │  └─ ...
 ├─ summary/       # 生成：ハイライトを元に生成した要約
 │  └─ ...
 ├─ problem_bank/  # 生成：要約を元に問題を生成、1問=1ノートのほうがSRSに強い
 |  └─ book_note.md # Frontmatterでメタ管理
-├─ app.py?
+├─ app.py
+├─ .env           # GEMINI_API_KEYの記述
+```
+- 仮想環境をactivate、app.pyと同じ階層で以下を実行する
+  - app.spec: ビルド設定ファイル
+  - build/: ブル土中の一時作業フォルダ
+  - dist/: 実行ファイル生成場所
+```
+pyinstaller app.py --onefile --name app --add-data ".env;.env" 
 ```
 
 ## モデル利用
