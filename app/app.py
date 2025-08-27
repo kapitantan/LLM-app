@@ -43,6 +43,7 @@ for f in highlight_dir.iterdir():
     for l in lines:
         if 'title' in l:
             title = l.split(':')[1]
+            title = title.strip() # 空白を除去しないとエラーになる
         if 'author' in l:
             author = l.split(':')[1]
 
@@ -86,7 +87,8 @@ for f in highlight_dir.iterdir():
     # 要約をMarkdownファイルとして出力
     save_dir = Path("summary")
     save_dir.mkdir(exist_ok=True)
-    filename = save_dir / f"{title}.md"
+    filename = save_dir/f"{title}.md"
+    print(filename)
     text = frontmatter + res
     filename.write_text(text,encoding="utf-8")
 
@@ -110,6 +112,7 @@ for f in summary_dir.iterdir():
         matches = re.search(pattern, text)
         frontmatter = matches.group(0)
         title = matches.group(1).split(':')[1]
+        title = title.strip() # 空白を除去しないとエラーになる
         # print(frontmatter)
 
         contents = (
