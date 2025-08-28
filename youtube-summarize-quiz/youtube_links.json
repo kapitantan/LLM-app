@@ -2,11 +2,31 @@
   {
     "url": "https://www.youtube.com/watch?v=BBe1ij0AyTk",
     "done": true,
-    "title": "【就活考察】東大生の就職志望No1 - コンサルティングファーム - 歴史と未来"
+    "title": "【就活考察】東大生の就職志望No1-コンサルティングファーム-歴史と未来",
+    "LLM_gen": true
   },
   {
     "url": "https://www.youtube.com/watch?v=6GCIwj1X9W4",
     "done": true,
-    "title": "なぜ鳩のヒナは見かけない？知られざる鳩の生態【アニメ】"
+    "title": "なぜ鳩のヒナは見かけない？知られざる鳩の生態【アニメ】",
+    "LLM_gen": true
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=OP6SEtY7kO8",
+    "done": true,
+    "title": "【世界一流エンジニアのチーム作り】成果を上げるチームとは-人に頼るハードルを下げる-同僚と意見が対立したら？-無駄な会議はどんどん削ろう-「理解」ファーストで取り組もう【米マイクロソフト牛尾剛】",
+    "LLM_gen": true
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=KlZ-QmPteqM",
+    "done": true,
+    "title": "GPTとは何かTransformerの視覚化-Chapter5,DeepLearning",
+    "LLM_gen": true
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=2Q1rDHtU8Wk",
+    "done": true,
+    "title": "【特別編】ハーバードやGoogleで使われている「超効率的学習法」【LIMITLESS超加速学習】",
+    "LLM_gen": true
   }
 ]
