@@ -9,3 +9,4 @@ build
 dist
 app.spec
 captions
+__pycache__
