@@ -6,6 +6,11 @@ from dotenv import load_dotenv
 from google import genai
 import os
 
+def load_gemini_api_key():
+    load_dotenv()
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    return gemini_api_key
+
 # LLMによる生成
 def LLM_gen(contents: str) -> str:
     client = genai.Client()
@@ -27,7 +32,7 @@ def replace_chars(s: str) -> str:
 
 # # youtubeの読み込み
 # jsonファイルの読み込み
-def summarize():
+def app():
     youtube_links_file_name = "youtube_links.json"
     youtube_links_path = Path(youtube_links_file_name)
     # if not youtube_links_path.exists():
@@ -66,9 +71,6 @@ def summarize():
                 print(f"[FAIL] {url} {title}")
 
     youtube_links_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-
-    # %% [markdown]
-    # # 文字お越こし要約
 
     # %%
     # パス設定
