@@ -5,6 +5,9 @@ from PySide6 import QtCore, QtWidgets, QtGui
 from summarizer_core import load_gemini_api_key, LLM_gen
 
 SUMMARY_DIR = Path(__file__).parent / "summary"
+SUMMARIZE_STR = "要約画面"
+MARKDOWN_PEWVIEW_STR = "Markdownプレビュー"
+YOUTUBE_SUMMARIZE_STR = "youtube要約"
 
 
 class SummarizeWorker(QtCore.QRunnable):
@@ -49,6 +52,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.page_markdown = QtWidgets.QWidget()
         self._build_markdown_page(self.page_markdown)
         self.stack.addWidget(self.page_markdown)
+
+        # ==== ページ3：youtubeリンク読み込み要約 ====
+        self.page_youtybe_summarize = QtWidgets.QWidget()
+        self._build_youtube_summarize_page(self.page_youtybe_summarize)
+        self.stack.addWidget(self.page_youtybe_summarize)
 
         # ---- スレッドプール ----
         self.pool = QtCore.QThreadPool.globalInstance()
@@ -121,6 +129,14 @@ class MainWindow(QtWidgets.QMainWindow):
         body.addLayout(right, 2)
 
     # ---------------------------
+    # UI: youtube要約
+    # ---------------------------
+    def _build_youtube_summarize_page(self, parent: QtWidgets.QWidget):
+        left = QtWidgets.QVBoxLayout()
+        left.addWidget(QtWidgets.QLabel("Summary フォルダ内ファイル"))
+
+
+    # ---------------------------
     # メニュー
     # ---------------------------
     def _build_menu(self):
@@ -128,15 +144,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
         menu_view = menubar.addMenu("表示(&V)")
 
-        act_summarize = QtGui.QAction("要約画面(&S)", self)
+        act_summarize = QtGui.QAction(SUMMARIZE_STR + "(&S)", self)
         act_summarize.setShortcut("Ctrl+1")
         act_summarize.triggered.connect(lambda: self.switch_page(0))
         menu_view.addAction(act_summarize)
 
-        act_markdown = QtGui.QAction("Markdownプレビュー(&M)", self)
+        act_markdown = QtGui.QAction(MARKDOWN_PEWVIEW_STR + "(&M)", self)
         act_markdown.setShortcut("Ctrl+2")
         act_markdown.triggered.connect(lambda: self.switch_page(1))
         menu_view.addAction(act_markdown)
+
+        act_youtube_summarize = QtGui.QAction(YOUTUBE_SUMMARIZE_STR + "(&M)", self)
+        act_youtube_summarize.setShortcut("Ctrl+3")
+        act_youtube_summarize.triggered.connect(lambda: self.switch_page(2))
+        menu_view.addAction(act_youtube_summarize)
 
         menu_view.addSeparator()
 
@@ -156,7 +177,7 @@ class MainWindow(QtWidgets.QMainWindow):
         QtWidgets.QMessageBox.information(
             self,
             "About",
-            "Python Summarizer\n\nCtrl+1: 要約画面 / Ctrl+2: Markdownプレビュー\nF5: ファイル一覧再読込",
+            "Python Summarizer\n\nCtrl+1: "+SUMMARIZE_STR+" / Ctrl+2: " + MARKDOWN_PEWVIEW_STR +" \nF5: ファイル一覧再読込",
         )
 
     # ---------------------------
@@ -164,7 +185,13 @@ class MainWindow(QtWidgets.QMainWindow):
     # ---------------------------
     def switch_page(self, index: int):
         self.stack.setCurrentIndex(index)
-        name = "要約画面" if index == 0 else "Markdownプレビュー"
+        match index:
+            case 0:
+                name = SUMMARIZE_STR 
+            case 1:
+                name = MARKDOWN_PEWVIEW_STR
+            case 2:
+                name = YOUTUBE_SUMMARIZE_STR
         self.statusBar().showMessage(f"{name} に切り替えました")
 
     # ---------------------------
