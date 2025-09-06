@@ -5,6 +5,7 @@ import json
 from dotenv import load_dotenv
 from google import genai
 import os
+import json
 
 def load_gemini_api_key():
     load_dotenv()
@@ -28,7 +29,49 @@ def replace_chars(s: str) -> str:
     s2 = s.translate(table)
     s3 = s2.replace(" ","")
     return s3
-# srtファイルを削除したときにjsonファイルのdoneを全てfalseに修正
+# TODO:srtファイルを削除したときにjsonファイルのdoneを全てfalseに修正する関数
+
+# URLをJSONに保存
+YT_LINKS_PATH = Path(__file__).parent / "youtube_links.json"
+def save_json(url: str) -> bool:
+    # 簡易的なバリデーション
+    _YT_REGEX = re.compile(r"^(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([\w\-]{11})(?:$|[&#?])")
+    match = _YT_REGEX.search(url.strip())
+    if not match:
+        print(f"Invalid YouTube URL")
+        return False
+    else:
+        print(f"問題なし")
+        video_id = match.group(1)
+    # JSON初期値で保存、既知のURLならスキップする
+    text = YT_LINKS_PATH.read_text(encoding='utf-8')
+    # print(text)
+    youtube_link = json.loads(text)
+    exist_flg = False
+    for var in youtube_link:
+        match = _YT_REGEX.search(var['url'].strip())
+        id = match.group(1)
+        if video_id == id:
+            print(f"{video_id=}")
+            print(f"{var['title']=}")
+            print(f"{var['url']=},{id=}")
+            exist_flg = True
+            break
+    if exist_flg:
+        print('save skip')
+        return True
+    
+    print('今から初期値で保存します')
+    add_url =  {
+        "url": url,
+        "done": False,
+        "title": None,
+        "LLM_gen": False
+    }
+    youtube_link.append(add_url)
+    text = json.dumps(youtube_link, ensure_ascii=False, indent=2)
+    YT_LINKS_PATH.write_text(text, encoding='utf-8')
+    return True
 
 # # youtubeの読み込み
 # jsonファイルの読み込み
