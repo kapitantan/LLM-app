@@ -15,6 +15,7 @@ class SummarizeWorker(QtCore.QRunnable):
     別スレッドで要約を実行するワーカー。
     結果はシグナルでUIスレッドに戻す。
     """
+
     class Signals(QtCore.QObject):
         finished = QtCore.Signal(str, str)  # (status, payload_or_error)
 
@@ -114,7 +115,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.md_viewer = QtWidgets.QTextBrowser()  # Markdown簡易レンダリング対応
         self.md_viewer.setOpenExternalLinks(True)
-        self.md_viewer.setPlaceholderText("summary フォルダの Markdown をプレビュー表示")
+        self.md_viewer.setPlaceholderText(
+            "summary フォルダの Markdown をプレビュー表示"
+        )
 
         left = QtWidgets.QVBoxLayout()
         left.addWidget(QtWidgets.QLabel("Summary フォルダ内ファイル"))
@@ -149,7 +152,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         layout.addLayout(url_layout)
         layout.addStretch(1)  # 下の余白
-
 
     # ---------------------------
     # メニュー
@@ -186,13 +188,16 @@ class MainWindow(QtWidgets.QMainWindow):
         act_about.triggered.connect(self._show_about)
         menu_help.addAction(act_about)
 
-
     @QtCore.Slot()
     def _show_about(self):
         QtWidgets.QMessageBox.information(
             self,
             "About",
-            "Python Summarizer\n\nCtrl+1: "+SUMMARIZE_STR+" / Ctrl+2: " + MARKDOWN_PEWVIEW_STR +" \nF5: ファイル一覧再読込",
+            "Python Summarizer\n\nCtrl+1: "
+            + SUMMARIZE_STR
+            + " / Ctrl+2: "
+            + MARKDOWN_PEWVIEW_STR
+            + " \nF5: ファイル一覧再読込",
         )
 
     # ---------------------------
@@ -202,7 +207,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.stack.setCurrentIndex(index)
         match index:
             case 0:
-                name = SUMMARIZE_STR 
+                name = SUMMARIZE_STR
             case 1:
                 name = MARKDOWN_PEWVIEW_STR
             case 2:
@@ -269,12 +274,12 @@ class MainWindow(QtWidgets.QMainWindow):
         if not url:
             QtWidgets.QMessageBox.information(self, "error", "空です。")
             return
-        
+
         print(f"{url=}")
         result = save_json(url)
-        
+
         if result:  # 保存成功したら入力欄をクリア
-            self.url_edit.clear()  
+            self.url_edit.clear()
         else:
             QtWidgets.QMessageBox.warning(self, "error", "Invalid URL")
 
