@@ -72,7 +72,7 @@ youtube_links_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), en
 
 # ファイル出力なしで要約成功したバージョン
 import asyncio 
-title_list = []
+title_list = [] # captionフォルダにあるタイトル名リスト
 contents_dic = {} 
 
 # パス設定
@@ -109,16 +109,20 @@ async def llm_task(contents: str):
     return await loop.run_in_executor(None, LLM_gen, contents) 
 
 async def main(): 
-    tasks = [llm_task(contents_dic[title]) for title in contents_dic] 
-    results = await asyncio.gather(*tasks)
+    # tasks = [llm_task(contents_dic[title]) for title in contents_dic] 
+    # results = await asyncio.gather(*tasks)
+    # results = []
+    # for title in contents_dic:
+    #     res = await llm_task(contents_dic[title])  # ここで1本ずつ待つ
+    #     results.append(res)
 
     json_text = youtube_links_path.read_text(encoding="utf-8")
     data = json.loads(json_text)
-    if len(data) == len(results):
-        print(f"要約した合計は一致")
-    else:
-        print(f"要約失敗が存在")
-        raise RuntimeError
+    # if len(data) == len(results):
+    #     print(f"要約した合計は一致")
+    # else:
+    #     print(f"未要約が存在")
+    #     raise RuntimeError
 
     # youtube_links.jsonに関するループ
     for v in data:
@@ -127,19 +131,20 @@ async def main():
         title = v['title']
         # title_listsに関するループ
         for t in title_list:
-            if t == v['title']:
+            if t == title:
                 LLM_gen_flg = v['LLM_gen']
                 name_match_flg = True
-                i = title_list.index(title)
-                res = results[i]
-                print(f"titleが一致 : {title } : {LLM_gen_flg=},{res}")
+                # i = title_list.index(title)
+                # res = results[i]
+                print(f"titleが一致 : {title } : {LLM_gen_flg=}")
                 break
 
         if not name_match_flg:
-            print(f"titleが不一致 : {title}")
-            break
+            print(f"!!! titleが不一致 : {title}")
+            continue
 
         if LLM_gen_flg==False:
+            res = await llm_task(contents_dic[title])  
             print(f"要約を出力します : {title}")
             file_name = summary_dir / f"{title}.md"
             print(file_name.name)

@@ -10,3 +10,4 @@ dist
 app.spec
 captions
 __pycache__
+*.json
