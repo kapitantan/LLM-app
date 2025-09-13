@@ -141,21 +141,41 @@ class MainWindow(QtWidgets.QMainWindow):
         self.url_edit = QtWidgets.QLineEdit()
         self.url_edit.setPlaceholderText("YouTubeのURLを入力してください")
 
-        # 読み込みボタン
+        # ボタン
         self.url_btn = QtWidgets.QPushButton("登録")
         self.url_btn.clicked.connect(self.on_url_clicked)
-        # 要約ボタン
+
         self.summarize_btn = QtWidgets.QPushButton("要約開始")
         self.summarize_btn.clicked.connect(self.on_summarize_clicked)
 
-        # 横並び
+        # 右側ボタンの縦レイアウト
+        btn_layout = QtWidgets.QVBoxLayout()
+        btn_layout.addWidget(self.url_btn, 1)
+        btn_layout.addWidget(self.summarize_btn, 1)
+        # ぴったり合わせたい場合は間隔ゼロも可：
+        # btn_layout.setSpacing(0)
+
+        # --- ここがポイント ---
+        # 縦方向に伸びられるように
+        spx = QtWidgets.QSizePolicy.Expanding
+        spy = QtWidgets.QSizePolicy.Expanding
+        self.url_edit.setSizePolicy(spx, spy)
+        self.url_btn.setSizePolicy(spx, spy)
+        self.summarize_btn.setSizePolicy(spx, spy)
+
+        # 入力欄の最小高さ＝ボタン2個分＋レイアウトの間隔
+        two_btn_h = max(self.url_btn.sizeHint().height(),
+                        self.summarize_btn.sizeHint().height()) * 2
+        self.url_edit.setMinimumHeight(two_btn_h + btn_layout.spacing())
+
+        # 左（入力）＋ 右（ボタン縦）を横並びに
         url_layout = QtWidgets.QHBoxLayout()
         url_layout.addWidget(self.url_edit, 7)
-        url_layout.addWidget(self.url_btn, 1)
-        url_layout.addWidget(self.summarize_btn, 1)
+        url_layout.addLayout(btn_layout, 1)
 
         layout.addLayout(url_layout)
-        layout.addStretch(1)  # 下の余白
+        layout.addStretch(1)
+
 
     # ---------------------------
     # メニュー
