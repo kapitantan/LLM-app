@@ -2,7 +2,7 @@
 import sys
 from pathlib import Path
 from PySide6 import QtCore, QtWidgets, QtGui
-from summarizer_core import load_gemini_api_key, LLM_gen, save_json
+from summarizer_core import load_gemini_api_key, LLM_gen, save_json, summarize_json
 
 SUMMARY_DIR = Path(__file__).parent / "summary"
 SUMMARIZE_STR = "要約画面"
@@ -142,13 +142,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.url_edit.setPlaceholderText("YouTubeのURLを入力してください")
 
         # 読み込みボタン
-        self.url_btn = QtWidgets.QPushButton("要約開始")
+        self.url_btn = QtWidgets.QPushButton("登録")
         self.url_btn.clicked.connect(self.on_url_clicked)
+        # 要約ボタン
+        self.summarize_btn = QtWidgets.QPushButton("要約開始")
+        self.summarize_btn.clicked.connect(self.on_summarize_clicked)
 
         # 横並び
         url_layout = QtWidgets.QHBoxLayout()
         url_layout.addWidget(self.url_edit, 7)
         url_layout.addWidget(self.url_btn, 1)
+        url_layout.addWidget(self.summarize_btn, 1)
 
         layout.addLayout(url_layout)
         layout.addStretch(1)  # 下の余白
@@ -268,6 +272,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.output_edit.setPlainText(f"[ERROR] {payload}")
 
+    '''youtubeのURL登録'''
     @QtCore.Slot()
     def on_url_clicked(self):
         url = self.url_edit.text().strip()
@@ -282,7 +287,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.url_edit.clear()
         else:
             QtWidgets.QMessageBox.warning(self, "error", "Invalid URL")
-
+    '''jsonファイルを参照して要約'''
+    @QtCore.Slot()
+    def on_summarize_clicked(self):
+        summarize_json()
 
 def main():
     load_gemini_api_key()
