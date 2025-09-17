@@ -33,6 +33,31 @@ class SummarizeWorker(QtCore.QRunnable):
         except Exception as e:
             self.signals.finished.emit("error", str(e))
 
+class QAItem(QtWidgets.QWidget):
+    """Q(ボタン)を押すとA(ラベル)が開閉する簡易アコーディオン"""
+    def __init__(self, question: str, answer: str, parent=None):
+        super().__init__(parent)
+        self.btn = QtWidgets.QToolButton()
+        self.btn.setText(question)
+        self.btn.setCheckable(True)
+        self.btn.setChecked(False)
+        self.btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+        self.btn.setArrowType(QtCore.Qt.RightArrow)
+
+        self.ans = QtWidgets.QLabel(answer)
+        self.ans.setWordWrap(True)
+        self.ans.setVisible(False)
+
+        self.btn.toggled.connect(self._toggle)
+
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.setContentsMargins(8, 6, 8, 6)
+        lay.addWidget(self.btn)
+        lay.addWidget(self.ans)
+
+    def _toggle(self, on: bool):
+        self.ans.setVisible(on)
+        self.btn.setArrowType(QtCore.Qt.DownArrow if on else QtCore.Qt.RightArrow)
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -132,7 +157,7 @@ class MainWindow(QtWidgets.QMainWindow):
         body.addLayout(right, 2)
 
     # ---------------------------
-    # UI: youtube要約
+    # UI: youtubeページ
     # ---------------------------
     def _build_youtube_summarize_page(self, parent: QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout(parent)
@@ -141,41 +166,56 @@ class MainWindow(QtWidgets.QMainWindow):
         self.url_edit = QtWidgets.QLineEdit()
         self.url_edit.setPlaceholderText("YouTubeのURLを入力してください")
 
-        # ボタン
+        # 右側ボタン群
         self.url_btn = QtWidgets.QPushButton("登録")
         self.url_btn.clicked.connect(self.on_url_clicked)
 
         self.summarize_btn = QtWidgets.QPushButton("要約開始")
         self.summarize_btn.clicked.connect(self.on_summarize_clicked)
 
-        # 右側ボタンの縦レイアウト
+        # ★追加：クイズ生成ボタン
+        self.quiz_btn = QtWidgets.QPushButton("クイズ生成")
+        self.quiz_btn.clicked.connect(self.on_quiz_clicked)
+        self.quiz_btn.setEnabled(True)  # 要件次第で要約完了後に有効化する運用も可
+
+        # 右カラム(縦)に3ボタン
         btn_layout = QtWidgets.QVBoxLayout()
         btn_layout.addWidget(self.url_btn, 1)
         btn_layout.addWidget(self.summarize_btn, 1)
-        # ぴったり合わせたい場合は間隔ゼロも可：
-        # btn_layout.setSpacing(0)
+        btn_layout.addWidget(self.quiz_btn, 1)
 
-        # --- ここがポイント ---
-        # 縦方向に伸びられるように
+        # 伸縮ポリシー（既存と同様）
         spx = QtWidgets.QSizePolicy.Expanding
         spy = QtWidgets.QSizePolicy.Expanding
         self.url_edit.setSizePolicy(spx, spy)
         self.url_btn.setSizePolicy(spx, spy)
         self.summarize_btn.setSizePolicy(spx, spy)
+        self.quiz_btn.setSizePolicy(spx, spy)
 
-        # 入力欄の最小高さ＝ボタン2個分＋レイアウトの間隔
         two_btn_h = max(self.url_btn.sizeHint().height(),
                         self.summarize_btn.sizeHint().height()) * 2
-        self.url_edit.setMinimumHeight(two_btn_h + btn_layout.spacing())
+        # ボタンが1つ増えたので3個分を見越して少しだけ余裕を足す
+        self.url_edit.setMinimumHeight(two_btn_h + self.quiz_btn.sizeHint().height() + btn_layout.spacing())
 
-        # 左（入力）＋ 右（ボタン縦）を横並びに
+        # 左(入力) + 右(ボタン) を横並び
         url_layout = QtWidgets.QHBoxLayout()
         url_layout.addWidget(self.url_edit, 7)
         url_layout.addLayout(btn_layout, 1)
 
         layout.addLayout(url_layout)
-        layout.addStretch(1)
 
+        # ★追加：クイズ表示領域（スクロール可、初期は非表示）
+        self.quiz_scroll = QtWidgets.QScrollArea()
+        self.quiz_scroll.setWidgetResizable(True)
+        self.quiz_container = QtWidgets.QWidget()
+        self.quiz_layout = QtWidgets.QVBoxLayout(self.quiz_container)
+        self.quiz_layout.setContentsMargins(4, 4, 4, 4)
+        self.quiz_layout.setSpacing(6)
+        self.quiz_scroll.setWidget(self.quiz_container)
+        self.quiz_scroll.setVisible(False)  # 生成されるまで隠す
+
+        layout.addWidget(self.quiz_scroll, 4)
+        layout.addStretch(1)
 
     # ---------------------------
     # メニュー
@@ -266,7 +306,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.statusBar().showMessage("読み込みに失敗しました")
 
     # ---------------------------
-    # 要約ジョブ
+    # 要約ページ：要約ボタン
     # ---------------------------
     @QtCore.Slot()
     def on_click(self):
@@ -291,8 +331,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.output_edit.setPlainText(payload)
         else:
             self.output_edit.setPlainText(f"[ERROR] {payload}")
-
-    '''youtubeのURL登録'''
+    
+    # ---------------------------
+    #  youtubeページ：URL登録ボタン
+    # ---------------------------
     @QtCore.Slot()
     def on_url_clicked(self):
         url = self.url_edit.text().strip()
@@ -307,10 +349,54 @@ class MainWindow(QtWidgets.QMainWindow):
             self.url_edit.clear()
         else:
             QtWidgets.QMessageBox.warning(self, "error", "Invalid URL")
-    '''jsonファイルを参照して要約'''
+    
+    # ---------------------------
+    # youtubeページ：jsonファイルを参照する要約ボタン
+    # ---------------------------
     @QtCore.Slot()
     def on_summarize_clicked(self):
         summarize_json()
+
+    @QtCore.Slot()
+    def on_quiz_clicked(self):
+        """
+        クイズ生成ボタン押下時：
+        - 10問のQ/Aを作り、リンク入力欄の下に並べる
+        - クリックで回答が開閉
+        ※ 今はダミー実装。LLMや要約結果連携は populate_quiz() に差し替えてください。
+        """
+        # TODO: summarizer_core 側の結果から実際のQ/Aを作る場合はここで取得
+        qa_pairs = self._demo_make_dummy_qa(10)
+        self.populate_quiz(qa_pairs)
+        self.statusBar().showMessage("クイズを生成しました（10問）")
+
+    def populate_quiz(self, qa_pairs: list[tuple[str, str]]):
+        """表示を初期化してQ/Aアイテムを縦に並べる"""
+        # 既存アイテムの掃除
+        while self.quiz_layout.count():
+            item = self.quiz_layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+
+        # アイテム追加
+        for q, a in qa_pairs:
+            self.quiz_layout.addWidget(QAItem(q, a))
+
+        self.quiz_layout.addStretch(1)
+        self.quiz_scroll.setVisible(True)
+
+    def _demo_make_dummy_qa(self, n: int) -> list[tuple[str, str]]:
+        """
+        デモ用のダミーQ/A生成。実運用では要約テキストから生成する関数に置換してください。
+        """
+        qa = []
+        for i in range(1, n + 1):
+            q = f"Q{i}. 動画の主要トピック{i}は？（クリックで回答）"
+            a = f"A{i}. ここに回答{i}が入ります。実装では要約から抽出/生成してください。"
+            qa.append((q, a))
+        return qa
+
 
 def main():
     load_gemini_api_key()
