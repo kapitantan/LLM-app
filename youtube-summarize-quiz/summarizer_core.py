@@ -117,10 +117,6 @@ def summarize_json() -> None:
     summary_dir = Path('summary')
     summary_dir.mkdir(exist_ok=True)
 
-    # gemini api keyの読み込み
-    # load_dotenv()
-    # gemini_api_key = os.getenv("GEMINI_API_KEY")
-
     json_text = youtube_links_path.read_text(encoding="utf-8")
     data = json.loads(json_text)
     # print(data)
@@ -169,6 +165,49 @@ def summarize_json() -> None:
             print(title)
     youtube_links_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
+SUMMARY_PATH = Path(__file__).parent / "summary"
+def make_quiz(n: int) ->  list[tuple[str, str]]:
+    qa_list = []
+    text = YT_LINKS_PATH.read_text(encoding='utf-8')
+    data = json.loads(text)
+    all_summary = ""
+    for x in data:
+        if x['LLM_gen'] == True:
+            text = (SUMMARY_PATH / (x['title'] + '.md')).read_text(encoding='utf-8')
+            all_summary += text
+    # print(all_summary)
+    contents = (
+        "以下は複数のYouTube動画の文字起こしを要約した文章です。"
+        + text +
+        f"要約文章から回答を導ける問題を{n}個作成してください。"
+        "毎回ランダムで異なる内容の問題を出力してください。"
+        "出力は必ずJSON形式で、各要素にQとAをkeyとして問題文と解答をvalueとして格納してください。"
+        "出力例は以下の通りです。"
+        "{'Q': '問題文', 'A': '解答'} のような形式です。"
+        "JSON形式以外の出力は絶対に不要です。```json なども絶対に不要です。"
+        "\n\n" 
+    )
+
+    res = LLM_gen(contents)
+    print(type(res),res) # type=str
+    try:
+        data = json.loads(res)
+    except json.decoder.JSONDecodeError as e:
+        print(f"error:{e}")
+        if 'json' in res:
+            response = res[8:]
+            response = response[:-4]
+            data = json.loads(response)
+        else:
+            data = []
+    print(type(data),len(data))
+    for qa in data:
+            q = qa["Q"]
+            a = qa["A"]
+            qa_list.append((q,a))        
+    return qa_list
+
+    
 
 # # youtubeの読み込み
 # jsonファイルの読み込み

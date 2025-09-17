@@ -2,7 +2,7 @@
 import sys
 from pathlib import Path
 from PySide6 import QtCore, QtWidgets, QtGui
-from summarizer_core import load_gemini_api_key, LLM_gen, save_json, summarize_json
+from summarizer_core import load_gemini_api_key, LLM_gen, save_json, summarize_json, make_quiz
 
 SUMMARY_DIR = Path(__file__).parent / "summary"
 SUMMARIZE_STR = "要約画面"
@@ -93,7 +93,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # ---- 初期化 ----
         self.load_file_list()
         self.statusBar().showMessage("準備完了")
-
+    '''ページUI'''
     # ---------------------------
     # UI: 要約ページ
     # ---------------------------
@@ -178,11 +178,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.quiz_btn.clicked.connect(self.on_quiz_clicked)
         self.quiz_btn.setEnabled(True)  # 要件次第で要約完了後に有効化する運用も可
 
+        # 進捗バーを追加
+        self.quiz_progress = QtWidgets.QProgressBar()
+        self.quiz_progress.setRange(0, 0)
+        self.quiz_progress.setVisible(False)
+
         # 右カラム(縦)に3ボタン
         btn_layout = QtWidgets.QVBoxLayout()
         btn_layout.addWidget(self.url_btn, 1)
         btn_layout.addWidget(self.summarize_btn, 1)
         btn_layout.addWidget(self.quiz_btn, 1)
+        btn_layout.addWidget(self.quiz_progress, 1)  # 進捗バーを追加
 
         # 伸縮ポリシー（既存と同様）
         spx = QtWidgets.QSizePolicy.Expanding
@@ -216,7 +222,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         layout.addWidget(self.quiz_scroll, 4)
         layout.addStretch(1)
-
+ 
     # ---------------------------
     # メニュー
     # ---------------------------
@@ -304,7 +310,7 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             self.md_viewer.setPlainText(f"[ERROR] {e}")
             self.statusBar().showMessage("読み込みに失敗しました")
-
+    '''ボタンUI'''
     # ---------------------------
     # 要約ページ：要約ボタン
     # ---------------------------
@@ -322,7 +328,9 @@ class MainWindow(QtWidgets.QMainWindow):
         worker = SummarizeWorker(text, self.spin.value())
         worker.signals.finished.connect(self.on_finished)
         self.pool.start(worker)
-
+    # ---------------------------
+    # 要約ページ：
+    # ---------------------------
     @QtCore.Slot(str, str)
     def on_finished(self, status: str, payload: str):
         self.progress.setVisible(False)
@@ -333,7 +341,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.output_edit.setPlainText(f"[ERROR] {payload}")
     
     # ---------------------------
-    #  youtubeページ：URL登録ボタン
+    # youtubeページ：URL登録ボタン
     # ---------------------------
     @QtCore.Slot()
     def on_url_clicked(self):
@@ -356,22 +364,32 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.Slot()
     def on_summarize_clicked(self):
         summarize_json()
-
+    
+    # ---------------------------
+    # youtubeページ：クイズ生成ボタン
+    # ---------------------------
     @QtCore.Slot()
     def on_quiz_clicked(self):
         """
         クイズ生成ボタン押下時：
         - 10問のQ/Aを作り、リンク入力欄の下に並べる
         - クリックで回答が開閉
-        ※ 今はダミー実装。LLMや要約結果連携は populate_quiz() に差し替えてください。
         """
-        # TODO: summarizer_core 側の結果から実際のQ/Aを作る場合はここで取得
-        qa_pairs = self._demo_make_dummy_qa(10)
+        # プログレスバーを表示して処理中をユーザーに示す
+        self.quiz_progress.setVisible(True)
+        self.quiz_btn.setEnabled(False)
+        
+        # qa_pairs = self._demo_make_dummy_qa(10)
+        qa_pairs = self.make_quiz_from_youtube(10)
         self.populate_quiz(qa_pairs)
+        self.quiz_progress.setVisible(False)
+        self.quiz_btn.setEnabled(True)
+        # プログレスバーを非表示にしてボタンを再度有効化
         self.statusBar().showMessage("クイズを生成しました（10問）")
-
+    # ---------------------------
+    # youtubeページ：表示を初期化してQ/Aアイテムを縦に並べる
+    # ---------------------------
     def populate_quiz(self, qa_pairs: list[tuple[str, str]]):
-        """表示を初期化してQ/Aアイテムを縦に並べる"""
         # 既存アイテムの掃除
         while self.quiz_layout.count():
             item = self.quiz_layout.takeAt(0)
@@ -381,22 +399,35 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # アイテム追加
         for q, a in qa_pairs:
+            print(q)
+            print(a)
             self.quiz_layout.addWidget(QAItem(q, a))
 
         self.quiz_layout.addStretch(1)
         self.quiz_scroll.setVisible(True)
-
+    # ---------------------------
+    # youtubeページ：デモ用のダミーQ/A生成
+    # ---------------------------
     def _demo_make_dummy_qa(self, n: int) -> list[tuple[str, str]]:
-        """
-        デモ用のダミーQ/A生成。実運用では要約テキストから生成する関数に置換してください。
-        """
         qa = []
         for i in range(1, n + 1):
             q = f"Q{i}. 動画の主要トピック{i}は？（クリックで回答）"
             a = f"A{i}. ここに回答{i}が入ります。実装では要約から抽出/生成してください。"
             qa.append((q, a))
         return qa
-
+    # ---------------------------
+    # youtubeページ：Q/A生成
+    # ---------------------------
+    def make_quiz_from_youtube(self, n: int) -> list[tuple[str,str]]:
+        qa = []
+        qa_list = make_quiz(n)
+        cnt = 0
+        for q,a in qa_list:
+            cnt += 1
+            question = f"Q{cnt}. {q}（クリックで回答）"
+            answer = f"A{cnt}. {a}"
+            qa.append((question,answer))
+        return qa
 
 def main():
     load_gemini_api_key()
