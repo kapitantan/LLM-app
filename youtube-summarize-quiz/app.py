@@ -1,7 +1,10 @@
 # app.py
 import sys
 from pathlib import Path
+from typing import Optional
+
 from PySide6 import QtCore, QtWidgets, QtGui
+
 from summarizer_core import load_gemini_api_key, LLM_gen, save_json, summarize_json, make_quiz
 
 SUMMARY_DIR = Path(__file__).parent / "summary"
@@ -32,6 +35,27 @@ class SummarizeWorker(QtCore.QRunnable):
             self.signals.finished.emit("ok", result)
         except Exception as e:
             self.signals.finished.emit("error", str(e))
+
+
+class QuizWorker(QtCore.QRunnable):
+    """Background worker to generate quizzes without blocking the UI."""
+
+    class Signals(QtCore.QObject):
+        finished = QtCore.Signal(str, object)
+
+    def __init__(self, markdown_text: str, num_questions: int):
+        super().__init__()
+        self.markdown_text = markdown_text
+        self.num_questions = num_questions
+        self.signals = QuizWorker.Signals()
+
+    @QtCore.Slot()
+    def run(self):
+        try:
+            qa_pairs = make_quiz(self.markdown_text, self.num_questions)
+            self.signals.finished.emit("ok", qa_pairs)
+        except Exception as exc:
+            self.signals.finished.emit("error", exc)
 
 class QAItem(QtWidgets.QWidget):
     """Q(ボタン)を押すとA(ラベル)が開閉する簡易アコーディオン"""
@@ -64,6 +88,9 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("Python Summarizer")
         self.resize(1000, 680)
+        self.current_markdown_content: str = ""
+        self._markdown_quiz_worker: Optional[QuizWorker] = None
+        self._youtube_quiz_worker: Optional[QuizWorker] = None
 
         # ---- ページコンテナ（画面切替用） ----
         self.stack = QtWidgets.QStackedWidget()
@@ -144,13 +171,33 @@ class MainWindow(QtWidgets.QMainWindow):
             "summary フォルダの Markdown をプレビュー表示"
         )
 
+        self.md_quiz_btn = QtWidgets.QPushButton("選択Markdownからクイズ生成 (10問)")
+        self.md_quiz_btn.setEnabled(False)
+        self.md_quiz_btn.clicked.connect(self.on_markdown_quiz_clicked)
+
+        self.md_quiz_progress = QtWidgets.QProgressBar()
+        self.md_quiz_progress.setRange(0, 0)
+        self.md_quiz_progress.setVisible(False)
+
+        self.md_quiz_scroll = QtWidgets.QScrollArea()
+        self.md_quiz_scroll.setWidgetResizable(True)
+        self.md_quiz_container = QtWidgets.QWidget()
+        self.md_quiz_layout = QtWidgets.QVBoxLayout(self.md_quiz_container)
+        self.md_quiz_layout.setContentsMargins(4, 4, 4, 4)
+        self.md_quiz_layout.setSpacing(6)
+        self.md_quiz_scroll.setWidget(self.md_quiz_container)
+        self.md_quiz_scroll.setVisible(False)
+
         left = QtWidgets.QVBoxLayout()
         left.addWidget(QtWidgets.QLabel("Summary フォルダ内ファイル"))
         left.addWidget(self.file_list, 1)
 
         right = QtWidgets.QVBoxLayout()
         right.addWidget(QtWidgets.QLabel("選択ファイル内容（プレビュー）"))
-        right.addWidget(self.md_viewer, 1)
+        right.addWidget(self.md_viewer, 2)
+        right.addWidget(self.md_quiz_btn)
+        right.addWidget(self.md_quiz_progress)
+        right.addWidget(self.md_quiz_scroll, 3)
 
         body = QtWidgets.QHBoxLayout(parent)
         body.addLayout(left, 1)
@@ -306,11 +353,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 content = f.read()
             # QTextBrowserは Markdown を簡易レンダリング可能
             self.md_viewer.setMarkdown(content)
+            self.current_markdown_content = content
+            self.md_quiz_btn.setEnabled(True)
+            self.populate_markdown_quiz([])
             self.statusBar().showMessage(f"読み込み: {file_path.name}")
         except Exception as e:
             self.md_viewer.setPlainText(f"[ERROR] {e}")
             self.statusBar().showMessage("読み込みに失敗しました")
-    '''ボタンUI'''
+            self.current_markdown_content = ""
+            self.md_quiz_btn.setEnabled(False)
+            self.populate_markdown_quiz([])
     # ---------------------------
     # 要約ページ：要約ボタン
     # ---------------------------
@@ -379,32 +431,45 @@ class MainWindow(QtWidgets.QMainWindow):
         self.quiz_progress.setVisible(True)
         self.quiz_btn.setEnabled(False)
         
-        # qa_pairs = self._demo_make_dummy_qa(10)
-        qa_pairs = self.make_quiz_from_youtube(10)
-        self.populate_quiz(qa_pairs)
-        self.quiz_progress.setVisible(False)
-        self.quiz_btn.setEnabled(True)
-        # プログレスバーを非表示にしてボタンを再度有効化
-        self.statusBar().showMessage("クイズを生成しました（10問）")
+        combined_summary = self._collect_all_summaries()
+        if not combined_summary.strip():
+            QtWidgets.QMessageBox.information(
+                self, "情報", "要約ファイルが見つからないためクイズを生成できません。"
+            )
+            self.quiz_progress.setVisible(False)
+            self.quiz_btn.setEnabled(True)
+            self.statusBar().showMessage("生成可能な要約が見つかりませんでした")
+            return
+
+        worker = QuizWorker(combined_summary, 10)
+        worker.signals.finished.connect(self._on_youtube_quiz_finished)
+        self._youtube_quiz_worker = worker
+        self.pool.start(worker)
     # ---------------------------
     # youtubeページ：表示を初期化してQ/Aアイテムを縦に並べる
     # ---------------------------
     def populate_quiz(self, qa_pairs: list[tuple[str, str]]):
-        # 既存アイテムの掃除
-        while self.quiz_layout.count():
-            item = self.quiz_layout.takeAt(0)
-            w = item.widget()
-            if w is not None:
-                w.deleteLater()
-
-        # アイテム追加
+        self._clear_layout(self.quiz_layout)
         for q, a in qa_pairs:
-            print(q)
-            print(a)
             self.quiz_layout.addWidget(QAItem(q, a))
+        if qa_pairs:
+            self.quiz_layout.addStretch(1)
+        self.quiz_scroll.setVisible(bool(qa_pairs))
 
-        self.quiz_layout.addStretch(1)
-        self.quiz_scroll.setVisible(True)
+    def populate_markdown_quiz(self, qa_pairs: list[tuple[str, str]]):
+        self._clear_layout(self.md_quiz_layout)
+        for q, a in qa_pairs:
+            self.md_quiz_layout.addWidget(QAItem(q, a))
+        if qa_pairs:
+            self.md_quiz_layout.addStretch(1)
+        self.md_quiz_scroll.setVisible(bool(qa_pairs))
+
+    def _clear_layout(self, layout: QtWidgets.QLayout):
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
     # ---------------------------
     # youtubeページ：デモ用のダミーQ/A生成
     # ---------------------------
@@ -418,16 +483,87 @@ class MainWindow(QtWidgets.QMainWindow):
     # ---------------------------
     # youtubeページ：Q/A生成
     # ---------------------------
-    def make_quiz_from_youtube(self, n: int) -> list[tuple[str,str]]:
-        qa = []
-        qa_list = make_quiz(n)
-        cnt = 0
-        for q,a in qa_list:
-            cnt += 1
-            question = f"Q{cnt}. {q}（クリックで回答）"
-            answer = f"A{cnt}. {a}"
-            qa.append((question,answer))
-        return qa
+    @QtCore.Slot()
+    def on_markdown_quiz_clicked(self):
+        if not self.current_markdown_content.strip():
+            QtWidgets.QMessageBox.information(self, "情報", "Markdownを選択してください。")
+            return
+
+        self.md_quiz_btn.setEnabled(False)
+        self.md_quiz_progress.setVisible(True)
+
+        worker = QuizWorker(self.current_markdown_content, 10)
+        worker.signals.finished.connect(self._on_markdown_quiz_finished)
+        self._markdown_quiz_worker = worker
+        self.pool.start(worker)
+
+    def _on_youtube_quiz_finished(self, status: str, payload: object):
+        self.quiz_progress.setVisible(False)
+        self.quiz_btn.setEnabled(True)
+        self._youtube_quiz_worker = None
+
+        if status == "ok":
+            qa_raw = payload if isinstance(payload, list) else []
+            formatted = self._format_quiz_pairs(qa_raw)
+            if formatted:
+                self.populate_quiz(formatted)
+                self.statusBar().showMessage("クイズを生成しました（10問）")
+            else:
+                self.populate_quiz([])
+                self.statusBar().showMessage("クイズを生成できませんでした")
+                QtWidgets.QMessageBox.warning(
+                    self, "エラー", "クイズを生成できませんでした。要約内容を確認してください。"
+                )
+        else:
+            self.populate_quiz([])
+            self.statusBar().showMessage("クイズ生成に失敗しました")
+            QtWidgets.QMessageBox.warning(
+                self, "エラー", f"クイズ生成に失敗しました: {payload}"
+            )
+
+    def _on_markdown_quiz_finished(self, status: str, payload: object):
+        self.md_quiz_progress.setVisible(False)
+        self.md_quiz_btn.setEnabled(True)
+        self._markdown_quiz_worker = None
+
+        if status == "ok":
+            qa_raw = payload if isinstance(payload, list) else []
+            formatted = self._format_quiz_pairs(qa_raw)
+            if formatted:
+                self.populate_markdown_quiz(formatted)
+                self.statusBar().showMessage("選択したMarkdownからクイズを生成しました（10問）")
+            else:
+                self.populate_markdown_quiz([])
+                self.statusBar().showMessage("クイズを生成できませんでした")
+                QtWidgets.QMessageBox.warning(
+                    self, "エラー", "クイズを生成できませんでした。要約内容を確認してください。"
+                )
+        else:
+            self.populate_markdown_quiz([])
+            self.statusBar().showMessage("クイズ生成に失敗しました")
+            QtWidgets.QMessageBox.warning(
+                self, "エラー", f"クイズ生成に失敗しました: {payload}"
+            )
+
+    def _format_quiz_pairs(self, qa_raw: list[tuple[str, str]]) -> list[tuple[str, str]]:
+        formatted: list[tuple[str, str]] = []
+        for idx, item in enumerate(qa_raw, start=1):
+            if not isinstance(item, (list, tuple)) or len(item) != 2:
+                continue
+            question, answer = item
+            q = f"Q{idx}. {question}（クリックで回答）"
+            a = f"A{idx}. {answer}"
+            formatted.append((q, a))
+        return formatted
+
+    def _collect_all_summaries(self) -> str:
+        collected: list[str] = []
+        for summary_file in sorted(SUMMARY_DIR.glob("*.md")):
+            try:
+                collected.append(summary_file.read_text(encoding="utf-8"))
+            except OSError:
+                continue
+        return "\n\n".join(collected)
 
 def main():
     load_gemini_api_key()

@@ -88,6 +88,7 @@ def summarize_json() -> None:
         "subtitlesformat": "srt",     # 形式
         "outtmpl": "captions/%(title)s.%(ext)s" 
     }
+    
 
     # 文字お越しの読み込み
     for v in data:
@@ -127,7 +128,12 @@ def summarize_json() -> None:
         # print(p)
         p_str = str(p)
         title_pattern = r"captions\\(.*).ja.srt"
-        title = re.search(title_pattern, p_str)[1] # タイトル部分の抽出
+        print(p_str)
+        try:
+            title = re.search(title_pattern, p_str)[1] # タイトル部分の抽出
+        except TypeError as e:
+            print(f"error:{e}")
+            continue
         title = replace_chars(title) # 危険文字の変換
 
         text = p.read_text(encoding='utf-8') # 
@@ -165,46 +171,67 @@ def summarize_json() -> None:
             print(title)
     youtube_links_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
-SUMMARY_PATH = Path(__file__).parent / "summary"
-def make_quiz(n: int) ->  list[tuple[str, str]]:
-    qa_list = []
-    text = YT_LINKS_PATH.read_text(encoding='utf-8')
-    data = json.loads(text)
-    all_summary = ""
-    for x in data:
-        if x['LLM_gen'] == True:
-            text = (SUMMARY_PATH / (x['title'] + '.md')).read_text(encoding='utf-8')
-            all_summary += text
-    # print(all_summary)
-    contents = (
-        "以下は複数のYouTube動画の文字起こしを要約した文章です。"
-        + text +
-        f"要約文章から回答を導ける問題を{n}個作成してください。"
-        "毎回ランダムで異なる内容の問題を出力してください。"
-        "出力は必ずJSON形式で、各要素にQとAをkeyとして問題文と解答をvalueとして格納してください。"
-        "出力例は以下の通りです。"
-        "{'Q': '問題文', 'A': '解答'} のような形式です。"
-        "JSON形式以外の出力は絶対に不要です。```json なども絶対に不要です。"
-        "\n\n" 
+def make_quiz(markdown_text: str, n: int) -> list[tuple[str, str]]:
+    """Generate quiz QA pairs from the provided markdown text via Gemini."""
+    markdown = markdown_text.strip()
+    if not markdown or n <= 0:
+        return []
+
+    prompt = (
+        "以下のMarkdown形式の文章を読んで、その内容を理解しているか確認する日本語のクイズを"
+        f"{n}問作成してください。"
+        "各出力要素はJSON形式で、キーは必ず'Q'と'A'のみを使用し、値に問題文と解答を入れてください。"
+        "問題は文章中の事実や要点に基づき、単純な言い換えではなく理解度を確かめる内容にしてください。"
+        "JSON以外の余計な文字列やコードフェンスは出力しないでください。"
+        "\n\n[Markdown]\n"
+        f"{markdown}\n"
     )
 
-    res = LLM_gen(contents)
-    print(type(res),res) # type=str
-    try:
-        data = json.loads(res)
-    except json.decoder.JSONDecodeError as e:
-        print(f"error:{e}")
-        if 'json' in res:
-            response = res[8:]
-            response = response[:-4]
-            data = json.loads(response)
-        else:
-            data = []
-    print(type(data),len(data))
-    for qa in data:
-            q = qa["Q"]
-            a = qa["A"]
-            qa_list.append((q,a))        
+    raw_response = LLM_gen(prompt)
+
+    def _parse_json_payload(payload: str) -> list[dict[str, str]]:
+        text_response = payload.strip()
+        try:
+            parsed = json.loads(text_response)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+        code_block = re.search(r"```(?:json)?\s*(.*?)```", text_response, re.DOTALL)
+        if code_block:
+            try:
+                parsed = json.loads(code_block.group(1))
+                if isinstance(parsed, list):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+
+        array_match = re.search(r"(\[.*\])", text_response, re.DOTALL)
+        if array_match:
+            try:
+                parsed = json.loads(array_match.group(1))
+                if isinstance(parsed, list):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+
+        return []
+
+    quiz_items = _parse_json_payload(raw_response)
+
+    qa_list: list[tuple[str, str]] = []
+    for qa in quiz_items:
+        if not isinstance(qa, dict):
+            continue
+        question = qa.get("Q")
+        answer = qa.get("A")
+        if not question or not answer:
+            continue
+        qa_list.append((str(question).strip(), str(answer).strip()))
+        if len(qa_list) >= n:
+            break
+
     return qa_list
 
     
