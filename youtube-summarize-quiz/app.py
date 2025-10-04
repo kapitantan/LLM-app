@@ -504,7 +504,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if status == "ok":
             qa_raw = payload if isinstance(payload, list) else []
-            formatted = self._format_quiz_pairs(qa_raw)
+            formatted = self._format_quiz_pairs(qa_raw, 10)
             if formatted:
                 self.populate_quiz(formatted)
                 self.statusBar().showMessage("クイズを生成しました（10問）")
@@ -528,7 +528,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if status == "ok":
             qa_raw = payload if isinstance(payload, list) else []
-            formatted = self._format_quiz_pairs(qa_raw)
+            formatted = self._format_quiz_pairs(qa_raw, 10)
             if formatted:
                 self.populate_markdown_quiz(formatted)
                 self.statusBar().showMessage("選択したMarkdownからクイズを生成しました（10問）")
@@ -545,7 +545,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self, "エラー", f"クイズ生成に失敗しました: {payload}"
             )
 
-    def _format_quiz_pairs(self, qa_raw: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    def _format_quiz_pairs(self, qa_raw: list[tuple[str, str]], max_items: int) -> list[tuple[str, str]]:
         formatted: list[tuple[str, str]] = []
         for idx, item in enumerate(qa_raw, start=1):
             if not isinstance(item, (list, tuple)) or len(item) != 2:
@@ -554,6 +554,8 @@ class MainWindow(QtWidgets.QMainWindow):
             q = f"Q{idx}. {question}（クリックで回答）"
             a = f"A{idx}. {answer}"
             formatted.append((q, a))
+            if idx >= max_items:
+                break
         return formatted
 
     def _collect_all_summaries(self) -> str:
