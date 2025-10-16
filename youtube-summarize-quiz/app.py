@@ -35,9 +35,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.markdown_page = MarkdownPreviewPage()
         self.youtube_page = YouTubeSummarizePage()
 
-        self.stack.addWidget(self.summarize_page)
         self.stack.addWidget(self.markdown_page)
         self.stack.addWidget(self.youtube_page)
+        self.stack.addWidget(self.summarize_page)
 
         self.summarize_page.summarizeRequested.connect(self._on_summarize_requested)
         self.markdown_page.fileSelected.connect(self._on_markdown_file_selected)
@@ -61,17 +61,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         menu_view = menubar.addMenu("表示(&V)")
 
-        act_summarize = QtGui.QAction(SUMMARIZE_STR + "(&S)", self)
+        act_summarize = QtGui.QAction(MARKDOWN_PREVIEW_STR + "(&S)", self)
         act_summarize.setShortcut("Ctrl+1")
         act_summarize.triggered.connect(lambda: self.switch_page(0))
         menu_view.addAction(act_summarize)
 
-        act_markdown = QtGui.QAction(MARKDOWN_PREVIEW_STR + "(&M)", self)
+        act_markdown = QtGui.QAction(YOUTUBE_SUMMARIZE_STR + "(&M)", self)
         act_markdown.setShortcut("Ctrl+2")
         act_markdown.triggered.connect(lambda: self.switch_page(1))
         menu_view.addAction(act_markdown)
 
-        act_youtube = QtGui.QAction(YOUTUBE_SUMMARIZE_STR + "(&Y)", self)
+        act_youtube = QtGui.QAction(SUMMARIZE_STR + "(&Y)", self)
         act_youtube.setShortcut("Ctrl+3")
         act_youtube.triggered.connect(lambda: self.switch_page(2))
         menu_view.addAction(act_youtube)
