@@ -171,6 +171,35 @@ def summarize_json() -> None:
             print(title)
     youtube_links_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
+def _parse_json_payload(payload: str) -> list[dict[str, str]]:
+    text_response = payload.strip()
+    try:
+        parsed = json.loads(text_response)
+        if isinstance(parsed, list):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    code_block = re.search(r"```(?:json)?\s*(.*?)```", text_response, re.DOTALL)
+    if code_block:
+        try:
+            parsed = json.loads(code_block.group(1))
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+    array_match = re.search(r"(\[.*\])", text_response, re.DOTALL)
+    if array_match:
+        try:
+            parsed = json.loads(array_match.group(1))
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+    return []
+
 def make_quiz(markdown_text: str, n: int) -> list[tuple[str, str]]:
     """Generate quiz QA pairs from the provided markdown text via Gemini."""
     markdown = markdown_text.strip()
@@ -189,34 +218,6 @@ def make_quiz(markdown_text: str, n: int) -> list[tuple[str, str]]:
 
     raw_response = LLM_gen(prompt)
 
-    def _parse_json_payload(payload: str) -> list[dict[str, str]]:
-        text_response = payload.strip()
-        try:
-            parsed = json.loads(text_response)
-            if isinstance(parsed, list):
-                return parsed
-        except json.JSONDecodeError:
-            pass
-
-        code_block = re.search(r"```(?:json)?\s*(.*?)```", text_response, re.DOTALL)
-        if code_block:
-            try:
-                parsed = json.loads(code_block.group(1))
-                if isinstance(parsed, list):
-                    return parsed
-            except json.JSONDecodeError:
-                pass
-
-        array_match = re.search(r"(\[.*\])", text_response, re.DOTALL)
-        if array_match:
-            try:
-                parsed = json.loads(array_match.group(1))
-                if isinstance(parsed, list):
-                    return parsed
-            except json.JSONDecodeError:
-                pass
-
-        return []
 
     quiz_items = _parse_json_payload(raw_response)
 
@@ -231,7 +232,7 @@ def make_quiz(markdown_text: str, n: int) -> list[tuple[str, str]]:
         qa_list.append((str(question).strip(), str(answer).strip()))
         if len(qa_list) >= n:
             break
-
+    print(qa_list)
     return qa_list
 
     
