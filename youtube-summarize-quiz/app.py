@@ -289,6 +289,16 @@ def _install_cli_force_exit(app: QtWidgets.QApplication) -> None:
 
     signal.signal(signal.SIGINT, _handle_sigint)
 
+    # Qt's event loop can block Python's signal machinery on Windows unless
+    # control returns to the interpreter periodically. A no-op timer keeps the
+    # loop pumping so SIGINT handlers still run when Ctrl+C is pressed.
+    timer = QtCore.QTimer()
+    timer.setInterval(100)
+    timer.timeout.connect(lambda: None)
+    timer.start()
+    app._ctrl_c_timer = timer  # type: ignore[attr-defined]
+    app.aboutToQuit.connect(timer.stop)
+
 
 def main() -> None:
     load_gemini_api_key()
