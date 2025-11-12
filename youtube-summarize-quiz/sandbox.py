@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.17.7"
-app = marimo.App()
+app = marimo.App(width="full")
 
 
 @app.cell(hide_code=True)
@@ -163,6 +163,56 @@ def _(
 def _():
     import marimo as mo
     return (mo,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Youtube Data API
+    """)
+    return
+
+
+@app.cell
+def _(load_dotenv, os):
+    import requests
+
+    def api_init():
+        load_dotenv()
+        API_KEY = os.environ['YOUTUBE_DATA_API_KEY']
+        return API_KEY
+    return api_init, requests
+
+
+@app.cell
+def _(requests):
+    def get_playlist_items(API_KEY: str, playlist_id: str) -> dict:
+        url = "https://www.googleapis.com/youtube/v3/playlistItems"
+        r = requests.get(
+            url,
+            params={"part":"snippet", "playlistId":playlist_id, "key":API_KEY},
+            timeout=20
+        )
+        r.raise_for_status()
+        return r.json()
+    return (get_playlist_items,)
+
+
+@app.cell
+def _(api_init, get_playlist_items):
+    API_KEY = api_init()
+    playlist_id = "PLrtfpfxtQtGusZ5mqhKki7ZyXJBGg9fQV"
+    PlaylistItem = get_playlist_items(API_KEY,playlist_id)
+    for item in PlaylistItem['items']:
+        print(item['id'])
+
+
+    return
+
+
+@app.cell
+def _():
+    return
 
 
 if __name__ == "__main__":
