@@ -8,12 +8,26 @@ import os
 import json
 
 def load_gemini_api_key():
+    """GEMINI_API_KEYを.envから読み込む。
+
+    Returns:
+        str | None: 環境変数に設定されていればAPIキー、存在しない場合はNone。
+    """
+
     load_dotenv()
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     return gemini_api_key
 
-# LLMによる生成
 def LLM_gen(contents: str) -> str:
+    """Geminiを使って文章を生成する。
+
+    Args:
+        contents (str): Geminiに渡す完全なプロンプト。
+
+    Returns:
+        str: 生成結果として返されるテキスト。
+    """
+
     client = genai.Client()
 
     response = client.models.generate_content(
@@ -22,8 +36,16 @@ def LLM_gen(contents: str) -> str:
     )
     return response.text
 
-# 危険な文字の除去
 def replace_chars(s: str) -> str:
+    """ファイル名に使えない文字を安全な文字へ置換する。
+
+    Args:
+        s (str): 元のタイトルやファイル名候補。
+
+    Returns:
+        str: 危険文字を除去した文字列。
+    """
+
     remove_chars = '\\/:*?"<>|￥＜＞｜'  # 削除対象文字
     table = str.maketrans({ch: '-' for ch in remove_chars})
     s2 = s.translate(table)
@@ -31,9 +53,17 @@ def replace_chars(s: str) -> str:
     return s3
 # TODO:srtファイルを削除したときにjsonファイルのdoneを全てfalseに修正する関数
 
-# URLをJSONに保存
 YT_LINKS_PATH = Path(__file__).parent / "youtube_links.json"
 def save_json(url: str) -> bool:
+    """YouTube URLをJSONに追記する（既知ならスキップ）。
+
+    Args:
+        url (str): 保存対象のYouTube動画URL。
+
+    Returns:
+        bool: バリデーション成功でTrue、URLが不正な場合はFalse。
+    """
+
     # 簡易的なバリデーション
     _YT_REGEX = re.compile(r"^(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([\w\-]{11})(?:$|[&#?])")
     match = _YT_REGEX.search(url.strip())
@@ -73,8 +103,13 @@ def save_json(url: str) -> bool:
     YT_LINKS_PATH.write_text(text, encoding='utf-8')
     return True
 
-# jsonファイルを参照して文字お越しダウンロード、要約生成
 def summarize_json() -> None:
+    """未処理のYouTubeリンクに対して字幕取得と要約生成を行う。
+
+    Returns:
+        None: 処理結果はファイルシステム（captions/・summary/・JSON）に反映される。
+    """
+
     # jsonファイルのパス設定
     youtube_links_file_name = "youtube_links.json"
     youtube_links_path = Path(youtube_links_file_name)
@@ -172,6 +207,15 @@ def summarize_json() -> None:
     youtube_links_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 def _parse_json_payload(payload: str) -> list[dict[str, str]]:
+    """GeminiレスポンスからJSON配列をベストエフォートで抽出する。
+
+    Args:
+        payload (str): コードフェンス等を含む可能性がある生テキストレスポンス。
+
+    Returns:
+        list[dict[str, str]]: `{"Q": ..., "A": ...}`形式の辞書リスト。解析に失敗した場合は空リスト。
+    """
+
     text_response = payload.strip()
     try:
         parsed = json.loads(text_response)
@@ -201,7 +245,16 @@ def _parse_json_payload(payload: str) -> list[dict[str, str]]:
     return []
 
 def make_quiz(markdown_text: str, n: int) -> list[tuple[str, str]]:
-    """Generate quiz QA pairs from the provided markdown text via Gemini."""
+    """要約MarkdownからGemini経由でクイズを生成する。
+
+    Args:
+        markdown_text (str): クイズの根拠となるMarkdown本文。
+        n (int): 生成したい設問ペアの数。
+
+    Returns:
+        list[tuple[str, str]]: 最大`n`件の(Question, Answer)タプル。
+    """
+
     markdown = markdown_text.strip()
     if not markdown or n <= 0:
         return []
@@ -240,6 +293,12 @@ def make_quiz(markdown_text: str, n: int) -> list[tuple[str, str]]:
 # # youtubeの読み込み
 # jsonファイルの読み込み
 def app():
+    """コマンドラインから全文書き起こしと要約生成を行う補助関数。
+
+    Returns:
+        None: 入出力はファイル更新と標準出力ログで確認する。
+    """
+
     youtube_links_file_name = "youtube_links.json"
     youtube_links_path = Path(youtube_links_file_name)
     # if not youtube_links_path.exists():
