@@ -103,7 +103,6 @@ def _(Path, genai, json, load_dotenv, os, re, yt_dlp):
         return s3
         # TODO:srtファイルを削除したときにjsonファイルのdoneを全てfalseに修正する関数
 
-
     BACE_PATH = Path(__file__).parent
     YT_LINKS_PATH = BACE_PATH / "youtube_links.json"
 
@@ -152,8 +151,6 @@ def _(Path, genai, json, load_dotenv, os, re, yt_dlp):
         text = json.dumps(youtube_link, ensure_ascii=False, indent=2)
         YT_LINKS_PATH.write_text(text, encoding="utf-8")
         return True
-
-
     def summarize_json() -> None:
         """
         JSON設定に従って字幕取得と要約生成を行う
@@ -257,8 +254,6 @@ def _(Path, genai, json, load_dotenv, os, re, yt_dlp):
         youtube_links_path.write_text(
             json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
         )
-
-
     def _parse_json_payload(payload: str) -> list[dict[str, str]]:
         """
         LLM応答文字列からJSON形式のクイズ配列を抽出する
@@ -294,8 +289,6 @@ def _(Path, genai, json, load_dotenv, os, re, yt_dlp):
                 pass
 
         return []
-
-
     def make_quiz(markdown_text: str, n: int) -> list[tuple[str, str]]:
         """
         要約Markdownを基にGeminiでクイズQAを生成する
@@ -345,7 +338,7 @@ def _(mo):
 
 
 @app.cell
-def _(load_dotenv, os):
+def _(load_dotenv, os, requests):
     def api_init():
         """
         dotenvからYouTube Data APIキーを読み込む
@@ -355,11 +348,6 @@ def _(load_dotenv, os):
         load_dotenv()
         API_KEY = os.environ["YOUTUBE_DATA_API_KEY"]
         return API_KEY
-    return (api_init,)
-
-
-@app.cell
-def _(requests):
     def get_playlist_items(API_KEY: str, playlist_id: str) -> dict:
         """
         YouTube Data APIで指定プレイリストのアイテムを取得する
@@ -379,13 +367,9 @@ def _(requests):
         )
         r.raise_for_status()
         return r.json()
-    return (get_playlist_items,)
-
-
-@app.function
-# URL作成
-def make_youtube_url(videoId: str) -> str:
-    return "https://www.youtube.com/watch?v=" + videoId
+    def make_youtube_url(videoId: str) -> str:
+        return "https://www.youtube.com/watch?v=" + videoId
+    return api_init, get_playlist_items, make_youtube_url
 
 
 @app.cell
@@ -397,7 +381,7 @@ def _(mo):
 
 
 @app.cell
-def _(api_init, get_playlist_items, save_json):
+def _(api_init, get_playlist_items, make_youtube_url, save_json):
     def get_playlist_url_list(_playlist_id: str) -> list:
         """ """
         API_KEY = api_init()
@@ -467,22 +451,12 @@ def _(DownloadError, YT_LINKS_PATH, json, yt_dlp):
 def _(mo):
     mo.md(r"""
     # 文字お越こし要約
-    `2+3`
     """)
     return
 
 
 @app.cell
-def _(
-    LLM_gen,
-    Path,
-    json,
-    load_dotenv,
-    os,
-    re,
-    replace_chars,
-    youtube_links_path,
-):
+def _(LLM_gen, Path, YT_LINKS_PATH, json, load_dotenv, os, re, replace_chars):
     # パス設定
     caption_dir = Path("captions")
     summary_dir = Path("summary")
@@ -492,7 +466,7 @@ def _(
     load_dotenv()
     # gemini api keyの読み込み
     gemini_api_key = os.getenv("GEMINI_API_KEY")
-    _json_text = youtube_links_path.read_text(encoding="utf-8")
+    _json_text = YT_LINKS_PATH.read_text(encoding="utf-8")
     _data = json.loads(_json_text)
     text_pattern = "\\d\\n.*\\n(.*)\\n"
     for p in caption_dir.iterdir():
@@ -522,14 +496,18 @@ def _(
                 if LLM_gen_flg == True:
                     print(f"要約済みです : {replaced_title}")
                 else:
-                    _v["LLM_gen"] = True
-                    res = LLM_gen(contents)
-                    print(f"{replaced_title},res={res!r}")
-                    file_name = summary_dir / f"{replaced_title}.md"
-                    file_name.write_text(res, encoding="utf-8")
+                    try:
+                        res = LLM_gen(contents)
+                        # print(f"{replaced_title},res={res!r}")
+                        file_name = summary_dir / f"{replaced_title}.md"
+                        file_name.write_text(res, encoding="utf-8")
+                        _v["LLM_gen"] = True
+                        print(f"{file_name}要約成功")
+                    except Exception as e:
+                        print(f"{replaced_title} 要約失敗：{e}")
         if not name_match_flg:  # print(v['title'])
             print(replaced_title)
-    youtube_links_path.write_text(
+    YT_LINKS_PATH.write_text(
         json.dumps(_data, indent=2, ensure_ascii=False), encoding="utf-8"
     )
     return
