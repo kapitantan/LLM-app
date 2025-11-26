@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import signal
 import sys
 from typing import Optional
 
@@ -277,9 +278,32 @@ class MainWindow(QtWidgets.QMainWindow):
         return "\n\n".join(collected)
 
 
+def _install_cli_force_exit(app: QtWidgets.QApplication) -> None:
+    """Ensure Ctrl+C terminates the Qt app when running via CLI."""
+
+    def _handle_sigint(signum: int, frame: object) -> None:  # noqa: D401, ARG001
+        # QApplication.exec() swallows KeyboardInterrupt, so force-quit here.
+        sys.stderr.write("\nCtrl+C detected. Exiting...\n")
+        sys.stderr.flush()
+        QtWidgets.QApplication.exit(130)
+
+    signal.signal(signal.SIGINT, _handle_sigint)
+
+    # Qt's event loop can block Python's signal machinery on Windows unless
+    # control returns to the interpreter periodically. A no-op timer keeps the
+    # loop pumping so SIGINT handlers still run when Ctrl+C is pressed.
+    timer = QtCore.QTimer()
+    timer.setInterval(100)
+    timer.timeout.connect(lambda: None)
+    timer.start()
+    app._ctrl_c_timer = timer  # type: ignore[attr-defined]
+    app.aboutToQuit.connect(timer.stop)
+
+
 def main() -> None:
     load_gemini_api_key()
     app = QtWidgets.QApplication(sys.argv)
+    _install_cli_force_exit(app)
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
