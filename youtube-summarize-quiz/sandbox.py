@@ -40,9 +40,12 @@ def _():
     import requests
     import marimo as mo
     from yt_dlp.utils import DownloadError
+    from dataclasses import dataclass
+
     return (
         DownloadError,
         Path,
+        dataclass,
         genai,
         json,
         load_dotenv,
@@ -54,6 +57,21 @@ def _():
     )
 
 
+@app.cell
+def _(mo):
+    mo.md(r"""
+    # constant
+    """)
+    return
+
+
+@app.cell
+def _(Path):
+    BACE_PATH = Path(__file__).parent
+    YT_LINKS_PATH = BACE_PATH / "youtube_links.json"
+    return (YT_LINKS_PATH,)
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -63,7 +81,7 @@ def _(mo):
 
 
 @app.cell
-def _(Path, genai, json, load_dotenv, os, re, yt_dlp):
+def _(load_dotenv, os):
     def load_gemini_api_key():
         """
         Gemini APIキーをdotenvから読み込む
@@ -73,8 +91,11 @@ def _(Path, genai, json, load_dotenv, os, re, yt_dlp):
         load_dotenv()
         gemini_api_key = os.getenv("GEMINI_API_KEY")
         return gemini_api_key
+    return
 
 
+@app.cell
+def _(genai):
     def LLM_gen(contents: str) -> str:
         """
         Geminiでプロンプトからテキストを生成する
@@ -82,31 +103,30 @@ def _(Path, genai, json, load_dotenv, os, re, yt_dlp):
          返り値: str モデルからの応答テキスト
         """
         client = genai.Client()
-
         response = client.models.generate_content(
             model="gemini-2.5-flash", contents=contents
         )
-        return response.text
+        return response.tex
+    return (LLM_gen,)
 
 
-    # 危険な文字の除去
-    def replace_chars(s: str) -> str:
-        """
-        ファイル名に使えない文字を安全な文字へ置換する
-         引数: s(str) 変換対象の文字列
-         返り値: str 置換後の文字列
-        """
-        remove_chars = '\\/:*?"<>|￥＜＞｜'  # 削除対象文字
-        table = str.maketrans({ch: "-" for ch in remove_chars})
-        s2 = s.translate(table)
-        s3 = s2.replace(" ", "")
-        return s3
-        # TODO:srtファイルを削除したときにjsonファイルのdoneを全てfalseに修正する関数
-
-    BACE_PATH = Path(__file__).parent
-    YT_LINKS_PATH = BACE_PATH / "youtube_links.json"
+@app.function
+def replace_chars(s: str) -> str:
+    """
+    ファイル名に使えない文字を安全な文字へ置換する
+     引数: s(str) 変換対象の文字列
+     返り値: str 置換後の文字列
+    """
+    remove_chars = '\\/:*?"<>|￥＜＞｜'  # 削除対象文字
+    table = str.maketrans({ch: "-" for ch in remove_chars})
+    s2 = s.translate(table)
+    s3 = s2.replace(" ", "")
+    return s3
+    # TODO:srtファイルを削除したときにjsonファイルのdoneを全てfalseに修正する関数
 
 
+@app.cell
+def _(YT_LINKS_PATH, json, re):
     def save_json(url: str) -> bool:
         """
         新しいYouTube URLをJSONに保存する
@@ -138,7 +158,7 @@ def _(Path, genai, json, load_dotenv, os, re, yt_dlp):
             if video_id == id:
                 print(f"{video_id=}")
                 print(f"{var['title']=}")
-                print(f"{var['url']=},{id=}")
+                print(f"{var['url']=}")
                 exist_flg = True
                 break
         if exist_flg:
@@ -151,6 +171,12 @@ def _(Path, genai, json, load_dotenv, os, re, yt_dlp):
         text = json.dumps(youtube_link, ensure_ascii=False, indent=2)
         YT_LINKS_PATH.write_text(text, encoding="utf-8")
         return True
+
+    return (save_json,)
+
+
+@app.cell
+def _(LLM_gen, Path, json, re, yt_dlp):
     def summarize_json() -> None:
         """
         JSON設定に従って字幕取得と要約生成を行う
@@ -254,6 +280,11 @@ def _(Path, genai, json, load_dotenv, os, re, yt_dlp):
         youtube_links_path.write_text(
             json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
         )
+    return
+
+
+@app.cell
+def _(json, re):
     def _parse_json_payload(payload: str) -> list[dict[str, str]]:
         """
         LLM応答文字列からJSON形式のクイズ配列を抽出する
@@ -289,6 +320,11 @@ def _(Path, genai, json, load_dotenv, os, re, yt_dlp):
                 pass
 
         return []
+    return
+
+
+@app.cell
+def _(LLM_gen):
     def make_quiz(markdown_text: str, n: int) -> list[tuple[str, str]]:
         """
         要約Markdownを基にGeminiでクイズQAを生成する
@@ -326,7 +362,7 @@ def _(Path, genai, json, load_dotenv, os, re, yt_dlp):
                 break
         print(qa_list)
         return qa_list
-    return LLM_gen, YT_LINKS_PATH, replace_chars, save_json
+    return
 
 
 @app.cell(hide_code=True)
@@ -338,7 +374,7 @@ def _(mo):
 
 
 @app.cell
-def _(load_dotenv, os, requests):
+def _(load_dotenv, os):
     def api_init():
         """
         dotenvからYouTube Data APIキーを読み込む
@@ -348,15 +384,20 @@ def _(load_dotenv, os, requests):
         load_dotenv()
         API_KEY = os.environ["YOUTUBE_DATA_API_KEY"]
         return API_KEY
+    return (api_init,)
+
+
+@app.cell
+def _(requests):
     def get_playlist_items(API_KEY: str, playlist_id: str) -> dict:
         """
         YouTube Data APIで指定プレイリストのアイテムを取得する
          引数: API_KEY(str) 認証キー, playlist_id(str) 対象プレイリストID
          返り値: dict APIレスポンスJSON
         """
-        url = "https://www.googleapis.com/youtube/v3/playlistItems"
-        r = requests.get(
-            url,
+        _endpoint = "https://www.googleapis.com/youtube/v3/playlistItems"
+        _r = requests.get(
+            _endpoint,
             params={
                 "part": "snippet",
                 "playlistId": playlist_id,
@@ -365,23 +406,45 @@ def _(load_dotenv, os, requests):
             },
             timeout=20,
         )
-        r.raise_for_status()
-        return r.json()
-    def make_youtube_url(videoId: str) -> str:
-        return "https://www.youtube.com/watch?v=" + videoId
-    return api_init, get_playlist_items, make_youtube_url
+        _r.raise_for_status()
+        return _r.json()
+    
+    def del_playlist_item(API_KEY: str, video_id: str):
+        _del_endpoint = 'https://youtube.googleapis.com/youtube/v3/playlistItems'
+        _r = requests.delete(
+            _del_endpoint,
+            params={
+                "id": video_id
+            }
+        )
+        return _r.json()
+    return (get_playlist_items,)
+
+
+@app.function
+def make_youtube_url(videoId: str) -> str:
+    return "https://www.youtube.com/watch?v=" + videoId
 
 
 @app.cell
-def _(mo):
-    mo.md(r"""
-    # 実行セル
-    """)
+def _(dataclass):
+    # PlayListItemには、
+    @dataclass
+    class Playlistitem:
+        video_id: str
+        title: str
+        
+        @classmethod
+        def from_dict(cls,item):
+            video_id = item["snippet"]["resourceId"]["videoId"]
+            title = item["snippet"]["title"]
+            return cls(video_id=video_id, title=title)
     return
 
 
 @app.cell
-def _(api_init, get_playlist_items, make_youtube_url, save_json):
+def _(api_init, get_playlist_items):
+    # 
     def get_playlist_url_list(_playlist_id: str) -> list:
         """ """
         API_KEY = api_init()
@@ -393,12 +456,24 @@ def _(api_init, get_playlist_items, make_youtube_url, save_json):
             _playlist_video_url_list.append(make_youtube_url(_videoId))
         return _playlist_video_url_list
 
+    return (get_playlist_url_list,)
 
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    # 実行セル
+    """)
+    return
+
+
+@app.cell
+def _(get_playlist_url_list, save_json):
     # プレイリストのvideoIdを取得
     playlist_id = "PLrtfpfxtQtGusZ5mqhKki7ZyXJBGg9fQV"
     playlist_video_url_list = get_playlist_url_list(playlist_id)
 
-    # jsonファイルに保存
+    # idから動画情報をjsonファイルに保存
     for _url in playlist_video_url_list:
         save_json(_url)
     return
@@ -419,31 +494,49 @@ def _(DownloadError, YT_LINKS_PATH, json, yt_dlp):
         "subtitlesformat": "srt",
         "outtmpl": "captions/%(title)s.%(ext)s",
     }
-    # jsonから読み込んだ情報をループで回して文字お越しを
+    # jsonから読み込んだ動画情報をループで回して文字お越しダウンロード
     for _v in data:
         # print(_v)
-        url = _v["url"]
-        done = _v["done"]
+        _url = _v["url"]
+        _done = _v["done"]
         _title = _v["title"]  # 日本語字幕
-        if done and _title != None:  # 形式
+        if _done and _title != None:  # 形式
             print(f"文字お越し済み {_title}")
             continue
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             # 文字お越しの読み込み
             try:
-                ret = ydl.download([url])
-                info = ydl.extract_info(url, download=False)
+                ret = ydl.download([_url])
+                info = ydl.extract_info(_url, download=False)
                 print(f"{info.keys()}")
                 _title = info["title"]
                 print(_title)
                 if ret == 0:
                     _v["done"] = True
                     _v["title"] = _title
-                    print(f"文字お越し成功： {url} {_title}")
+                    print(f"文字お越し成功： {_url} {_title}")
                 else:
-                    print(f"文字お越し失敗： {url} {_title}")
+                    print(f"文字お越し失敗： {_url} {_title}")
             except DownloadError as e:
                 print("ダウンロードエラー：", e)
+
+    return
+
+
+@app.cell
+def _():
+    # 文字お越しできたものをプレイリストから削除
+    # API_KEY = api_init()
+    # _PlaylistItem = get_playlist_items(API_KEY, playlist_id)
+
+    # for _item in _PlaylistItem['items']:
+    #     _i = Playlistitem.from_dict(_item)
+    #     print(_i.video_id,_i.title)
+    #     for _v in data:
+    #         if _v['title'] == _i.title:
+    #             print(del_playlist_item(API_KEY,_i.video_id))
+        
+    # 要約
     return
 
 
@@ -456,7 +549,7 @@ def _(mo):
 
 
 @app.cell
-def _(LLM_gen, Path, YT_LINKS_PATH, json, load_dotenv, os, re, replace_chars):
+def _(LLM_gen, Path, YT_LINKS_PATH, json, load_dotenv, os, re):
     # パス設定
     caption_dir = Path("captions")
     summary_dir = Path("summary")
